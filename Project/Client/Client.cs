@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
+using Helpers;
 
 namespace Client;
 
@@ -21,8 +21,15 @@ public class Client
 
     public async Task Send(string data)
     {
-        var bytes = Encoding.UTF8.GetBytes(data);
-        await _socket.SendToAsync(new ArraySegment<byte>(bytes), _endPoint);
+        var packet = new Packet
+        {
+            SequenceNumber = 0,
+            AckNumber = 0,
+            Payload = data
+        };
+
+        var packetBytes = packet.ConvertPacketToBytes();
+        await _socket.SendToAsync(new ArraySegment<byte>(packetBytes), _endPoint);
         Console.WriteLine("SENT");
         
         
