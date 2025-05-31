@@ -22,18 +22,22 @@ public class Server
 
     public async Task Run()
     {
+        Bind();
+
         while (true)
         {
             var buffer = new byte[1024];
             try
             {
-                Bind();
+
+                EndPoint senderEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
                 var result =
                     await _serverSocket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None,
-                        _remoteEndPoint);
+                        senderEndPoint);
                 Console.WriteLine("Client connected");
-                var message = Encoding.UTF8.GetString(buffer, 0, result.ReceivedBytes);
+                
+                var message = Encoding.UTF8.GetString(buffer, 0, 4);
 
                 Console.WriteLine(message);
             }
