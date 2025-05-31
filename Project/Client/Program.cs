@@ -7,13 +7,22 @@ public class Program
 {
     static async Task Main(string[] args)
     {
-        var targetIp = args[TargetIp];
-        var targetPort = args[TargetPort];
-        var timeout = args[TimeoutArg];
-        var maxRetry = args[MaxRetry];
+        try
+        {
+            Validator.ValidateClient(args);
 
-        Validator.ValidateClient(targetIp, targetPort, timeout, maxRetry);
+            var targetIp = args[TargetIp];
+            var targetPort = args[TargetPort];
+            var timeout = args[TimeoutArg];
+            var maxRetry = args[MaxRetry];
 
-        var client = new Client(targetIp, int.Parse(targetPort), int.Parse(timeout), int.Parse(maxRetry));
+
+            var client = new Client(targetIp, int.Parse(targetPort), int.Parse(timeout), int.Parse(maxRetry));
+            await client.Send("hello");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
     }
 }

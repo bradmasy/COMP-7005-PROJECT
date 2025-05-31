@@ -1,26 +1,30 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace Client;
 
 public class Client
 {
-    private readonly int _port;
-    private readonly IPAddress _ip;
     private Socket _socket;
+    private EndPoint _endPoint;
+
 
     public Client(string ipAddress, int port, int timeout, int maxRetry)
     {
-        _ip = IPAddress.Parse(ipAddress);
-        _port = port;
+        var ip = IPAddress.Parse(ipAddress);
+        _endPoint = new IPEndPoint(ip, port);
         
         
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
     }
 
-    public async Task Connect()
+    public async Task Send(string data)
     {
-        var endPoint = new IPEndPoint(_ip, _port);
-        await _socket.ConnectAsync(endPoint);
+        var bytes = Encoding.UTF8.GetBytes(data);
+        await _socket.SendToAsync(new ArraySegment<byte>(bytes), _endPoint);
+        Console.WriteLine("SENT");
+        
+        
     }
 }
