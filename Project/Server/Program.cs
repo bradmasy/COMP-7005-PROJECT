@@ -1,9 +1,27 @@
-﻿namespace Server;
+﻿using static Helpers.Constants;
+using Helpers;
+
+namespace Server;
 
 class Program
 {
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
-        Console.WriteLine("Hello, World!");
+        try
+        {
+            var ip = args[ServerIp];
+            var port = args[ServerPort];
+
+            Validator.ValidateServer(ip, port);
+
+            var server = new Server(ip, int.Parse(port));
+
+            // Run the server
+            await server.Run();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+        }
     }
 }
