@@ -6,7 +6,7 @@ public static class Constants
     public const int MinPort = 0;
     public const int MaxPort = 65535;
     public const int ServerIp = 0;
-    public const int ServerPort = 0;
+    public const int ServerPort = 1;
     public const int Connections = 10;
     
     // Packet Constants

@@ -11,7 +11,8 @@ class Program
         {
             var ip = args[ServerIp];
             var port = args[ServerPort];
-
+            Console.WriteLine($"Server IP: {ip}");
+            Console.WriteLine($"Server Port: {port}");
             Validator.ValidateServer(ip, port);
 
             var server = new Server(ip, int.Parse(port));

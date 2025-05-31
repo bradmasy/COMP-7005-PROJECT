@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using static Helpers.Constants;
 
 namespace Server;
@@ -9,36 +10,44 @@ public class Server
     private readonly int _port;
     private readonly IPAddress _ip;
     private readonly Socket _serverSocket;
+    private readonly EndPoint _remoteEndPoint;
 
     public Server(string ipAddress, int port)
     {
         _ip = IPAddress.Parse(ipAddress);
         _port = port;
         _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        _remoteEndPoint = new IPEndPoint(IPAddress.Any, 80); // Accept from any IP and Port
     }
 
     public async Task Run()
     {
         while (true)
         {
+            var buffer = new byte[1024];
             try
             {
-                BindAndListen();
-                
-                var client = await _serverSocket.AcceptAsync();
-                Console.WriteLine(client);
+                Bind();
+
+                var result =
+                    await _serverSocket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None,
+                        _remoteEndPoint);
+                Console.WriteLine("Client connected");
+                var message = Encoding.UTF8.GetString(buffer, 0, result.ReceivedBytes);
+
+                Console.WriteLine(message);
             }
             catch (Exception e)
             {
+                Console.WriteLine(e);
                 Console.WriteLine(e.Message);
             }
         }
     }
 
-    private void BindAndListen()
+    private void Bind()
     {
         var ipEndpoint = new IPEndPoint(_ip, _port);
         _serverSocket.Bind(ipEndpoint);
-        _serverSocket.Listen(Connections);
     }
 }
