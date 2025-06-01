@@ -23,7 +23,7 @@ public class Client
     {
         var packet = new Packet
         {
-            SequenceNumber = 0,
+            SequenceNumber = 1,
             AckNumber = 0,
             Payload = data
         };

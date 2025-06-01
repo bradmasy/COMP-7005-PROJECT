@@ -40,10 +40,12 @@ public class Packet
         // create a packet of dynamic lenght where the header size is fixed but payload is n bytes
         var packet = new byte[HeaderSize + payloadBytes.Length];
 
+        Console.WriteLine(packet.Length);
         Buffer.BlockCopy(sequenceNumberBytes, OffSet, packet, OffSet, SequenceNumberSize);
         Buffer.BlockCopy(ackNumberBytes, OffSet, packet, SequenceNumberSize, AckNumberSize);
         Buffer.BlockCopy(payloadBytes, OffSet, packet, HeaderSize, payloadBytes.Length);
-
+        
+        Console.WriteLine(packet.ToString());
         return packet;
     }
 }

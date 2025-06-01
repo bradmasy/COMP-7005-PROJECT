@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Helpers;
 using static Helpers.Constants;
 
 namespace Server;
@@ -11,7 +12,7 @@ public class Server
     private readonly IPAddress _ip;
     private readonly Socket _serverSocket;
     private readonly EndPoint _remoteEndPoint;
-
+    
     public Server(string ipAddress, int port)
     {
         _ip = IPAddress.Parse(ipAddress);
@@ -32,14 +33,22 @@ public class Server
 
                 EndPoint senderEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
-                var result =
+                var datagram =
                     await _serverSocket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None,
                         senderEndPoint);
                 Console.WriteLine("Client connected");
                 
-                var message = Encoding.UTF8.GetString(buffer, 0, 4);
-
-                Console.WriteLine(message);
+                // get the sequence number
+                var sequenceNumber = BitConverter.ToInt32(buffer, 0);
+                // get the acknowledgement number
+                var ackNumber = BitConverter.ToInt32(buffer, 4);
+                // the payload
+                var payload = Encoding.UTF8.GetString(buffer, 8, datagram.ReceivedBytes - 8);
+                
+                Console.WriteLine(sequenceNumber);
+                Console.WriteLine(ackNumber);
+                Console.WriteLine(payload);
+                
             }
             catch (Exception e)
             {

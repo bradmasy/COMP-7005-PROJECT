@@ -32,5 +32,21 @@ public static class Constants
     public const int TargetPort = 1;
     public const int TimeoutArg = 2;
     public const int MaxRetry = 3;
+    public const int ValidClientArgs = 4;
 
+    // Proxy
+
+    public const int ValidProxyArgs = 12;
+    public const int ListenIp = 0;
+    public const int ListenPort = 1;
+    public const int ForwardingIp = 2;
+    public const int ForwardingPort = 3;
+    public const int ClientDropPercentage = 4;
+    public const int ServerDropPercentage = 5;
+    public const int ClientDelayChancePercentage = 6;
+    public const int ServerDelayChancePercentage = 7;
+    public const int ClientDelayTimeMin = 8;
+    public const int ClientDelayTimeMax = 9;
+    public const int ServerDelayTimeMin = 10;
+    public const int ServerDelayTimeMax = 11;
 }

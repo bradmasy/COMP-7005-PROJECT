@@ -7,31 +7,18 @@ public static class Validator
 {
     public static void ValidateServer(string ipAddress, string port)
     {
-        var ipValid = IPAddress.TryParse(ipAddress, out var ip);
-
-        if (!ipValid) throw new ArgumentException("Invalid IP address");
-
-        var portValid = int.TryParse(port, out var p);
-
-        if (!portValid)
-            throw new ArgumentException($"Invalid port. Port must be an integer between {MinPort} and {MaxPort}");
-
-        if (p is < MinPort or > MaxPort) throw new ArgumentException("Invalid port numbers");
+        ValidateIp(ipAddress);
+        ValidatePort(port);
     }
 
     public static void ValidateClient(string[] args)
     {
-        if (args.Length != 4) throw new ArgumentException("Invalid amount of arguments. Please provide an argument for IP, Port, Timeout and Max Retry.");
-        var ipValid = IPAddress.TryParse(args[TargetIp], out var ip);
+        if (args.Length != ValidClientArgs)
+            throw new ArgumentException(
+                "Invalid amount of arguments. Please provide an argument for IP, Port, Timeout and Max Retry.");
 
-        if (!ipValid) throw new ArgumentException("Invalid IP address");
-
-        var portValid = int.TryParse(args[TargetPort], out var p);
-
-        if (!portValid)
-            throw new ArgumentException($"Invalid port. Port must be an integer between {MinPort} and {MaxPort}");
-
-        if (p is < MinPort or > MaxPort) throw new ArgumentException("Invalid port numbers");
+        ValidateIp(args[TargetIp]);
+        ValidatePort(args[TargetPort]);
 
         var timeoutValid = int.TryParse(args[TimeoutArg], out var to);
 
@@ -40,5 +27,53 @@ public static class Validator
         var maxRetryValid = int.TryParse(args[MaxRetry], out var mr);
 
         if (!maxRetryValid) throw new ArgumentException("Invalid maxRetry number");
+    }
+
+    public static void ValidateProxy(string[] args)
+    {
+        if (args.Length != ValidProxyArgs) throw new ArgumentException("Invalid amount of arguments.");
+
+        ValidateIp(args[ListenIp]);
+        ValidatePort(args[ListenPort]);
+        ValidateIp(args[ForwardingIp]);
+        ValidatePort(args[ForwardingPort]);
+        ValidatePercentage(args[ClientDropPercentage]);
+        ValidatePercentage(args[ServerDropPercentage]);
+        ValidatePercentage(args[ClientDelayChancePercentage]);
+        ValidatePercentage(args[ServerDelayChancePercentage]);
+        ValidateTime(args[ClientDelayTimeMin]);
+        ValidateTime(args[ClientDelayTimeMax]);
+        ValidateTime(args[ServerDelayTimeMin]);
+        ValidateTime(args[ServerDelayTimeMax]);
+    }
+
+    private static void ValidateTime(string time)
+    {
+        var valid = TimeSpan.TryParse(time, out var parsedTime);
+        if (!valid) throw new ArgumentException("Invalid time");
+        if (parsedTime.TotalMinutes < 0) throw new ArgumentException("Invalid time, time must be a positive number");
+    }
+
+    private static void ValidatePercentage(string percentage)
+    {
+        var parsedPercentage = double.TryParse(percentage, out var parsedPercentageInt);
+        if (parsedPercentage) throw new ArgumentException("Invalid percentage number");
+        if (parsedPercentageInt is < 0 or > 100)
+            throw new ArgumentException("Invalid percentage, must be <= 0 or <= 100");
+    }
+
+    private static void ValidateIp(string ipAddress)
+    {
+        var ipValid = IPAddress.TryParse(ipAddress, out var ip);
+
+        if (!ipValid) throw new ArgumentException("Invalid IP address");
+    }
+
+    private static void ValidatePort(string port)
+    {
+        var portValid = int.TryParse(port, out var p);
+
+        if (!portValid) throw new ArgumentException("Invalid port number");
+        if (p is < MinPort or > MaxPort) throw new ArgumentException("Invalid port numbers");
     }
 }
