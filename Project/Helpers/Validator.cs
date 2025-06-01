@@ -57,7 +57,7 @@ public static class Validator
     private static void ValidatePercentage(string percentage)
     {
         var parsedPercentage = double.TryParse(percentage, out var parsedPercentageInt);
-        if (parsedPercentage) throw new ArgumentException("Invalid percentage number");
+        if (!parsedPercentage) throw new ArgumentException("Invalid percentage number");
         if (parsedPercentageInt is < 0 or > 100)
             throw new ArgumentException("Invalid percentage, must be <= 0 or <= 100");
     }

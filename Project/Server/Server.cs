@@ -30,7 +30,6 @@ public class Server
             var buffer = new byte[1024];
             try
             {
-
                 EndPoint senderEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
                 var datagram =
