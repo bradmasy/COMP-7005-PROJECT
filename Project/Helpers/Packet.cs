@@ -44,8 +44,26 @@ public class Packet
         Buffer.BlockCopy(sequenceNumberBytes, OffSet, packet, OffSet, SequenceNumberSize);
         Buffer.BlockCopy(ackNumberBytes, OffSet, packet, SequenceNumberSize, AckNumberSize);
         Buffer.BlockCopy(payloadBytes, OffSet, packet, HeaderSize, payloadBytes.Length);
-        
+
         Console.WriteLine(packet.ToString());
         return packet;
+    }
+
+    public static Packet ConvertBytesToPacket(byte[] buffer)
+    {
+        var sequenceNumber = BitConverter.ToInt32(buffer, 0);
+
+        // get the acknowledgement number
+        var ackNumber = BitConverter.ToInt32(buffer, 4);
+
+        // the payload
+        var payload = Encoding.UTF8.GetString(buffer, 8, buffer.Length - 8);
+
+        return new Packet { SequenceNumber = sequenceNumber, AckNumber = ackNumber, Payload = payload };
+    }
+
+    public override string ToString()
+    {
+        return $"--Packet--\nSequenceNumber: {SequenceNumber}\nAckNumber: {AckNumber}\nPayload: {Payload}";
     }
 }

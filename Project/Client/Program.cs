@@ -18,7 +18,7 @@ public class Program
 
 
             var client = new Client(targetIp, int.Parse(targetPort), int.Parse(timeout), int.Parse(maxRetry));
-            await client.Send("hello");
+            await client.Run();
         }
         catch (Exception ex)
         {

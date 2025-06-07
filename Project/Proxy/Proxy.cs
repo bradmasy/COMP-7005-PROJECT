@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Helpers;
 
 namespace Proxy;
 
@@ -67,9 +68,14 @@ public class Proxy
             while (true)
             {
                 var result = await _socket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None, sender);
+                Console.WriteLine($"incoming packet from: {result.RemoteEndPoint}");
+                Console.WriteLine($"is it the client: {result.RemoteEndPoint.Equals(_clientEndPoint)}");
+                var packet = Packet.ConvertBytesToPacket(buffer);
+                Console.WriteLine(packet.ToString());
                 var forwardTo = result.RemoteEndPoint.Equals(_clientEndPoint) ? _serverEndPoint : _clientEndPoint;
+                Console.WriteLine($"forwarding to: {forwardTo}");
                 var isToClient = forwardTo.Equals(_clientEndPoint);
-
+                
                 var isDropped = IsDropped(isToClient
                     ? _clientDropPercent
                     : _serverDropPercent);
@@ -90,6 +96,7 @@ public class Proxy
                 }
 
                 await _socket.SendToAsync(new ArraySegment<byte>(buffer), SocketFlags.None, forwardTo);
+                buffer.AsSpan().Clear();
             }
         }
         catch (Exception ex)
