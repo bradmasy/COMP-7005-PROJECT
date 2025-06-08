@@ -8,7 +8,7 @@ public class Proxy
 {
     private readonly Socket _socket;
 
-    private readonly EndPoint _clientEndPoint;
+    private readonly EndPoint _proxyEndPoint;
     private readonly EndPoint _serverEndPoint;
 
     private readonly IPAddress _listenIp;
@@ -37,7 +37,6 @@ public class Proxy
         int serverDelayTimeMin,
         int serverDelayTimeMax)
     {
-        Console.WriteLine("Proxy started");
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
 
         _clientDropPercent = clientDropPercent;
@@ -52,10 +51,12 @@ public class Proxy
         _targetIp = IPAddress.Parse(targetIp);
         _listenIp = IPAddress.Parse(listenIp);
 
-        _clientEndPoint = new IPEndPoint(_listenIp, listenPort);
+        _proxyEndPoint = new IPEndPoint(_listenIp, listenPort);
         _serverEndPoint = new IPEndPoint(_targetIp, targetPort);
 
-        _socket.Bind(_clientEndPoint);
+        Console.WriteLine($"Proxy started on {_proxyEndPoint}");
+
+        _socket.Bind(_proxyEndPoint);
     }
 
     public async Task Run()
@@ -68,34 +69,52 @@ public class Proxy
             while (true)
             {
                 var result = await _socket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None, sender);
-                Console.WriteLine($"incoming packet from: {result.RemoteEndPoint}");
-                Console.WriteLine($"is it the client: {result.RemoteEndPoint.Equals(_clientEndPoint)}");
                 var packet = Packet.ConvertBytesToPacket(buffer);
+
+                // append the incoming IP of the packet as the endpoint for the returning packet to help redirect to client
+                var isToClient = !result.RemoteEndPoint.Equals(_serverEndPoint);
+
+                if (isToClient)
+                {
+                    packet.EndPoint = ((IPEndPoint)result.RemoteEndPoint).Address;
+                    packet.Port = ((IPEndPoint)result.RemoteEndPoint).Port;
+                }
+
                 Console.WriteLine(packet.ToString());
-                var forwardTo = result.RemoteEndPoint.Equals(_clientEndPoint) ? _serverEndPoint : _clientEndPoint;
-                Console.WriteLine($"forwarding to: {forwardTo}");
-                var isToClient = forwardTo.Equals(_clientEndPoint);
-                
+
+                // If the incoming packet is from the static server, we will forward to the client endpoint
+                var forwardTo = result.RemoteEndPoint.Equals(_serverEndPoint)
+                    ? new IPEndPoint(packet.EndPoint, packet.Port)
+                    : _serverEndPoint;
+
                 var isDropped = IsDropped(isToClient
                     ? _clientDropPercent
                     : _serverDropPercent);
 
-                if (isDropped) continue;
+                if (isDropped)
+                {
+                    Console.WriteLine($"\n--Dropping Packet From {(isToClient ? "Client" : "Server")}--\n");
+                    continue;
+                }
 
                 var isDelayed =
                     IsDelayed(isToClient ? _clientDelayPercent : _serverDelayPercent);
 
                 if (isDelayed)
                 {
+                    Console.WriteLine($"\n--Delaying Packet From {(isToClient ? "Client" : "Server")}--\n");
                     var min = isToClient ? _clientDelayTimeMin : _serverDelayTimeMin;
                     var max = isToClient ? _clientDelayTimeMax : _serverDelayTimeMax;
                     var delayTime = CalculateDelayTime(min, max);
-                    var timeSpan = TimeSpan.FromMilliseconds(delayTime);
 
-                    Task.Delay(timeSpan).Wait();
+                    Console.WriteLine($"--Delaying Packet By {delayTime}s--\n");
+
+                    await Task.Delay(TimeSpan.FromSeconds(delayTime));
                 }
 
-                await _socket.SendToAsync(new ArraySegment<byte>(buffer), SocketFlags.None, forwardTo);
+                Console.WriteLine($"\n--Forwarding Packet to {forwardTo}--\n");
+                await _socket.SendToAsync(new ArraySegment<byte>(packet.ConvertPacketToBytes()), SocketFlags.None,
+                    forwardTo);
                 buffer.AsSpan().Clear();
             }
         }
@@ -111,6 +130,8 @@ public class Proxy
         var random = new Random();
         var percent = random.NextDouble() * 100;
 
+        Console.WriteLine(
+            $"Drop Percentage {percent}% | Calculated Drop Percentage {dropPercentage}% {percent < dropPercentage}");
         return percent < dropPercentage;
     }
 

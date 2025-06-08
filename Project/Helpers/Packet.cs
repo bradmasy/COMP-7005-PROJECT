@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using static Helpers.Constants;
 
@@ -16,7 +17,7 @@ public class Packet
      * The sequence number representing the ordering of packets
      *
      */
-    public required int SequenceNumber { get; set; }
+    public required int SequenceNumber { get; init; }
 
     /**
      * The acknowledgement number, a number used to identify the order of the packets so that
@@ -24,9 +25,11 @@ public class Packet
      *
      * when an acknowledgement number is 0 it is the first packet in communication.
      */
-    public required int AckNumber { get; set; }
+    public required int AckNumber { get; init; }
 
-    public required string Payload { get; set; }
+    public required string Payload { get; init; }
+    public int Port { get; set; } = 0;
+    public IPAddress? EndPoint { get; set; }
 
     /**
      * Converts the packet into its header format in bytes
@@ -36,34 +39,42 @@ public class Packet
         var sequenceNumberBytes = BitConverter.GetBytes(SequenceNumber);
         var ackNumberBytes = BitConverter.GetBytes(AckNumber);
         var payloadBytes = Encoding.UTF8.GetBytes(Payload);
+        var portBytes = BitConverter.GetBytes(Port);
+        var endPointBytes = EndPoint?.GetAddressBytes();
 
         // create a packet of dynamic lenght where the header size is fixed but payload is n bytes
         var packet = new byte[HeaderSize + payloadBytes.Length];
-
-        Console.WriteLine(packet.Length);
-        Buffer.BlockCopy(sequenceNumberBytes, OffSet, packet, OffSet, SequenceNumberSize);
-        Buffer.BlockCopy(ackNumberBytes, OffSet, packet, SequenceNumberSize, AckNumberSize);
-        Buffer.BlockCopy(payloadBytes, OffSet, packet, HeaderSize, payloadBytes.Length);
-
-        Console.WriteLine(packet.ToString());
+        
+        if (endPointBytes != null) Buffer.BlockCopy(endPointBytes, OffSet, packet, 0, IpSize);
+        Buffer.BlockCopy(portBytes, OffSet, packet, IpSize, PortSize);
+        Buffer.BlockCopy(sequenceNumberBytes, OffSet, packet, IpSize + PortSize, SequenceNumberSize);
+        Buffer.BlockCopy(ackNumberBytes, OffSet, packet, IpSize + PortSize + SequenceNumberSize, AckNumberSize);
+        Buffer.BlockCopy(payloadBytes, OffSet, packet, IpSize + PortSize + SequenceNumberSize + AckNumberSize,
+            payloadBytes.Length);
         return packet;
     }
 
     public static Packet ConvertBytesToPacket(byte[] buffer)
     {
-        var sequenceNumber = BitConverter.ToInt32(buffer, 0);
+        var endPoint = new IPAddress(new ReadOnlySpan<byte>(buffer, 0, IpSize));
+        var port = BitConverter.ToUInt16(new ReadOnlySpan<byte>(buffer, IpSize, PortSize));
+        var sequenceNumber =
+            BitConverter.ToInt32(new ReadOnlySpan<byte>(buffer, IpSize + PortSize, SequenceNumberSize));
+        var ackNumber =
+            BitConverter.ToInt32(new ReadOnlySpan<byte>(buffer, IpSize + PortSize + SequenceNumberSize, AckNumberSize));
+        var payload = Encoding.UTF8.GetString(new ReadOnlySpan<byte>(buffer,
+            IpSize + PortSize + SequenceNumberSize + AckNumberSize,
+            buffer.Length - (IpSize + PortSize + SequenceNumberSize + AckNumberSize)));
 
-        // get the acknowledgement number
-        var ackNumber = BitConverter.ToInt32(buffer, 4);
-
-        // the payload
-        var payload = Encoding.UTF8.GetString(buffer, 8, buffer.Length - 8);
-
-        return new Packet { SequenceNumber = sequenceNumber, AckNumber = ackNumber, Payload = payload };
+        return new Packet
+        {
+            EndPoint = endPoint, Port = port, SequenceNumber = sequenceNumber, AckNumber = ackNumber, Payload = payload
+        };
     }
 
     public override string ToString()
     {
-        return $"--Packet--\nSequenceNumber: {SequenceNumber}\nAckNumber: {AckNumber}\nPayload: {Payload}";
+        return
+            $"--Packet--\nEndPoint: {EndPoint}\nPort: {Port}\nSequenceNumber: {SequenceNumber}\nAckNumber: {AckNumber}\nPayload: {Payload}\n";
     }
 }

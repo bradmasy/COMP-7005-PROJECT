@@ -8,22 +8,26 @@ namespace Client;
 public class Client
 {
     private readonly Socket _socket;
-    private readonly EndPoint? _endPoint;
+    private readonly EndPoint _endPoint;
     private int _timeout;
+    private readonly IPAddress _ipAddress;
     private int _maxRetry;
+    private readonly int _port;
 
 
     public Client(string ipAddress, int port, int timeout, int maxRetry)
     {
-        var ip = IPAddress.Parse(ipAddress);
-        _endPoint = new IPEndPoint(ip, port);
+        _port = port;
+        _ipAddress = IPAddress.Parse(ipAddress);
+        _endPoint = new IPEndPoint(_ipAddress, port);
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        _socket.Bind(new IPEndPoint(IPAddress.Any, 0));
         _timeout = timeout;
         _maxRetry = maxRetry;
         _socket.ReceiveTimeout = timeout;
     }
 
-    public async Task Run()
+    public async Task<byte[]> Run()
     {
         // have sequence number incrementing
         var sequenceNumber = new Random().Next(1000, 9999);
@@ -33,19 +37,37 @@ public class Client
         {
             while (true)
             {
-                Console.WriteLine("Send to server:\n");
+                Console.WriteLine("Please Type The Payload For The Packet:\n");
                 var input = Console.ReadLine();
+                Console.WriteLine("\n");
 
                 if (string.IsNullOrEmpty(input)) throw new Exception("Error: Please enter a valid argument.");
-                await Send(input, sequenceNumber, ackNumber);
+
+                byte[]? received = null;
+
+                for (var i = 0; i < _maxRetry; i++)
+                {
+                    Console.WriteLine($"Sending message {i + 1}/{_maxRetry}");
+                    await Send(input, sequenceNumber, ackNumber);
+
+                    var receiveTask = Receive();
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(_timeout));
+
+                    var success = await Task.WhenAny(receiveTask, timeoutTask);
+
+                    if (success != receiveTask) continue;
+                    
+                    received = receiveTask.Result;
+                    break;
+                }
+
+                if (received == null) throw new Exception("Error: No packet received.");
 
 
-                var acknowledgement = await RecurseReceive(0);
-                Console.WriteLine("Acknowledgement Received:\n");
-                var convertedPacket = ConvertBytesToPacket(acknowledgement);
-                Console.WriteLine(acknowledgement);
-                Console.WriteLine(convertedPacket.AckNumber);
-                Console.WriteLine("Acknowledgement Received:\n");
+                var convertedPacket = Packet.ConvertBytesToPacket(received);
+                Console.WriteLine(convertedPacket.ToString());
+
+                ackNumber++;
             }
         }
         catch (Exception ex)
@@ -65,8 +87,9 @@ public class Client
         };
 
         var packetBytes = packet.ConvertPacketToBytes();
+        var bytesToPacket = Packet.ConvertBytesToPacket(packetBytes);
+        Console.WriteLine(bytesToPacket.ToString());
         await _socket.SendToAsync(new ArraySegment<byte>(packetBytes), _endPoint);
-        Console.WriteLine("SENT");
     }
 
     private async Task<byte[]> Receive()
@@ -77,38 +100,19 @@ public class Client
         var result = await _socket.ReceiveFromAsync(
             new ArraySegment<byte>(buffer), SocketFlags.None, remoteEndPoint);
 
-        // Trim to actual received length
         var receivedData = buffer[..result.ReceivedBytes];
 
         Console.WriteLine("RECEIVED");
         return receivedData;
     }
 
-    private async Task<byte[]> RecurseReceive(int retryCount)
-    {
-        if (retryCount > _maxRetry)
-        {
-            throw new Exception($"Retry {retryCount} of {_maxRetry}");
-        }
-
-        return await Receive();
-    }
-
-    private static Packet ConvertBytesToPacket(byte[] packet)
-    {
-        var sequenceNumber = BitConverter.ToInt32(packet[..4], 0);
-        var ackNumber = BitConverter.ToInt32(packet[4..], 0);
-        var payload = packet[8..];
-
-        var convertedPayload = Encoding.UTF8.GetString(payload);
-
-        var convertedPacket = new Packet
-        {
-            SequenceNumber = sequenceNumber,
-            AckNumber = ackNumber,
-            Payload = convertedPayload
-        };
-
-        return convertedPacket;
-    }
+    // private async Task<byte[]> RecurseReceive(int retryCount)
+    // {
+    //     if (retryCount > _maxRetry)
+    //     {
+    //         throw new Exception($"Retry {retryCount} of {_maxRetry}");
+    //     }
+    //
+    //     return await Receive();
+    // }
 }

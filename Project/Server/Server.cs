@@ -36,31 +36,23 @@ public class Server
                 var datagram =
                     await _serverSocket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None,
                         senderEndPoint);
-                Console.WriteLine("Client connected");
+                Console.WriteLine("Client connected\n");
 
-                Console.WriteLine(datagram.RemoteEndPoint);
-                // get the sequence number
-                var sequenceNumber = BitConverter.ToInt32(buffer, 0);
-
-                // get the acknowledgement number
-                var ackNumber = BitConverter.ToInt32(buffer, 4);
-
-                // the payload
-                var payload = Encoding.UTF8.GetString(buffer, 8, datagram.ReceivedBytes - 8);
-
-                Console.WriteLine(sequenceNumber);
-                Console.WriteLine(ackNumber);
-                Console.WriteLine(payload);
-
+                var dataGramToPacket = Packet.ConvertBytesToPacket(buffer.ToArray());
+            
+                Console.WriteLine(dataGramToPacket.ToString());
+                
                 // send the ack packet back, no payload needed
-                var updatedAckNumber = ackNumber + sequenceNumber;
+                var updatedAckNumber = dataGramToPacket.AckNumber + dataGramToPacket.SequenceNumber;
                 var ackPacket = new Packet
                 {
                     AckNumber = updatedAckNumber,
-                    SequenceNumber = sequenceNumber,
-                    Payload = "received"
+                    SequenceNumber = dataGramToPacket.SequenceNumber + dataGramToPacket.Payload.Length,
+                    Payload = "Received",
+                    EndPoint = dataGramToPacket.EndPoint,
+                    Port = dataGramToPacket.Port
                 };
-                
+                Console.WriteLine("\n");
                 Console.WriteLine(ackPacket.ToString());
 
                 await _serverSocket.SendToAsync(new ArraySegment<byte>(ackPacket.ConvertPacketToBytes()),

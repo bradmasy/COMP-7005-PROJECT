@@ -22,9 +22,12 @@ public static class Constants
     public const int MaxHeaderSize = Byte * 4;
     public const int OffsetSize = Bit * 4;
     public const int OffSet = 0;
+    
+    public const int PortSize = 2;
+    public const int IpSize = 4;
     public const int SequenceNumberSize = 4;
     public const int AckNumberSize = 4;
-    public const int HeaderSize = SequenceNumberSize + AckNumberSize;
+    public const int HeaderSize = IpSize + PortSize + SequenceNumberSize + AckNumberSize;
     
     // Client Constants
 
