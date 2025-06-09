@@ -52,4 +52,7 @@ public static class Constants
     public const int ClientDelayTimeMax = 9;
     public const int ServerDelayTimeMin = 10;
     public const int ServerDelayTimeMax = 11;
+    
+    // UDP
+    public const int MaxPacketSize = 65535;
 }

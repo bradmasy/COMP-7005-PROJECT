@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using Helpers;
+using static Helpers.Constants;
 
 namespace Client;
 
@@ -27,10 +27,9 @@ public class Client
         _socket.ReceiveTimeout = timeout;
     }
 
-    public async Task<byte[]> Run()
+    public async Task Run()
     {
-        // have sequence number incrementing
-        var sequenceNumber = new Random().Next(1000, 9999);
+        var sequenceNumber = 0;
         var ackNumber = 0;
 
         try
@@ -53,21 +52,36 @@ public class Client
                     var receiveTask = Receive();
                     var timeoutTask = Task.Delay(TimeSpan.FromSeconds(_timeout));
 
-                    var success = await Task.WhenAny(receiveTask, timeoutTask);
+                    var completedTask = await Task.WhenAny(receiveTask, timeoutTask);
 
-                    if (success != receiveTask) continue;
-                    
+                    if (completedTask == timeoutTask) continue;
+
                     received = receiveTask.Result;
                     break;
                 }
 
                 if (received == null) throw new Exception("Error: No packet received.");
 
-
                 var convertedPacket = Packet.ConvertBytesToPacket(received);
+                Console.WriteLine("\nReceived Packet:\n");
                 Console.WriteLine(convertedPacket.ToString());
 
-                ackNumber++;
+                // if the Acknowledgement is incorrect
+                if (convertedPacket.AckNumber != (input.Length + ackNumber))
+                {
+                    Console.WriteLine($"Incoming Ack Number: {convertedPacket.AckNumber}");
+                    Console.WriteLine($"Expected Ack Number: {input.Length + ackNumber}");
+                    Console.WriteLine("Error: Invalid packet received.");
+                }
+
+                // if the sequence is incorrect
+                if (sequenceNumber != (sequenceNumber + 1))
+                {
+                    Console.WriteLine("Error: Invalid sequence number received.");
+                }
+
+                ackNumber += convertedPacket.AckNumber;
+                sequenceNumber += convertedPacket.SequenceNumber;
             }
         }
         catch (Exception ex)
@@ -94,25 +108,14 @@ public class Client
 
     private async Task<byte[]> Receive()
     {
-        var buffer = new byte[1024];
+        var buffer = new byte[MaxPacketSize];
+
         EndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
         var result = await _socket.ReceiveFromAsync(
             new ArraySegment<byte>(buffer), SocketFlags.None, remoteEndPoint);
 
         var receivedData = buffer[..result.ReceivedBytes];
-
-        Console.WriteLine("RECEIVED");
         return receivedData;
     }
-
-    // private async Task<byte[]> RecurseReceive(int retryCount)
-    // {
-    //     if (retryCount > _maxRetry)
-    //     {
-    //         throw new Exception($"Retry {retryCount} of {_maxRetry}");
-    //     }
-    //
-    //     return await Receive();
-    // }
 }

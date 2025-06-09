@@ -27,7 +27,7 @@ public class Server
 
         while (true)
         {
-            var buffer = new byte[1024];
+            var buffer = new byte[MaxPacketSize];
 
             try
             {
@@ -36,22 +36,26 @@ public class Server
                 var datagram =
                     await _serverSocket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None,
                         senderEndPoint);
-                Console.WriteLine("Client connected\n");
+                Console.WriteLine("\n--Client connected--\n");
 
                 var dataGramToPacket = Packet.ConvertBytesToPacket(buffer.ToArray());
-            
+
                 Console.WriteLine(dataGramToPacket.ToString());
-                
+
                 // send the ack packet back, no payload needed
-                var updatedAckNumber = dataGramToPacket.AckNumber + dataGramToPacket.SequenceNumber;
+                Console.WriteLine($"Ack Number {dataGramToPacket.AckNumber}");
+                Console.WriteLine($"Payload Size: {dataGramToPacket.Payload.Length}");
+                Console.WriteLine($"Payload: {dataGramToPacket.Payload}");
+                var updatedAckNumber = dataGramToPacket.AckNumber + dataGramToPacket.Payload.Length;
                 var ackPacket = new Packet
                 {
-                    AckNumber = updatedAckNumber,
-                    SequenceNumber = dataGramToPacket.SequenceNumber + dataGramToPacket.Payload.Length,
+                    AckNumber = updatedAckNumber, // update the ack to show we have read the data
+                    SequenceNumber = dataGramToPacket.SequenceNumber + 1, // increment the sequence 
                     Payload = "Received",
                     EndPoint = dataGramToPacket.EndPoint,
                     Port = dataGramToPacket.Port
                 };
+
                 Console.WriteLine("\n");
                 Console.WriteLine(ackPacket.ToString());
 

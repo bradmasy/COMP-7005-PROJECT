@@ -44,7 +44,7 @@ public class Packet
 
         // create a packet of dynamic lenght where the header size is fixed but payload is n bytes
         var packet = new byte[HeaderSize + payloadBytes.Length];
-        
+
         if (endPointBytes != null) Buffer.BlockCopy(endPointBytes, OffSet, packet, 0, IpSize);
         Buffer.BlockCopy(portBytes, OffSet, packet, IpSize, PortSize);
         Buffer.BlockCopy(sequenceNumberBytes, OffSet, packet, IpSize + PortSize, SequenceNumberSize);
@@ -64,7 +64,7 @@ public class Packet
             BitConverter.ToInt32(new ReadOnlySpan<byte>(buffer, IpSize + PortSize + SequenceNumberSize, AckNumberSize));
         var payload = Encoding.UTF8.GetString(new ReadOnlySpan<byte>(buffer,
             IpSize + PortSize + SequenceNumberSize + AckNumberSize,
-            buffer.Length - (IpSize + PortSize + SequenceNumberSize + AckNumberSize)));
+            buffer.Length - HeaderSize));
 
         return new Packet
         {

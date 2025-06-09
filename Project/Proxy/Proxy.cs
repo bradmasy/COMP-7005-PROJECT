@@ -8,11 +8,7 @@ public class Proxy
 {
     private readonly Socket _socket;
 
-    private readonly EndPoint _proxyEndPoint;
     private readonly EndPoint _serverEndPoint;
-
-    private readonly IPAddress _listenIp;
-    private readonly IPAddress _targetIp;
 
     private readonly double _clientDropPercent;
     private readonly double _serverDropPercent;
@@ -48,15 +44,15 @@ public class Proxy
         _clientDelayTimeMax = clientDelayTimeMax;
         _serverDelayTimeMin = serverDelayTimeMin;
 
-        _targetIp = IPAddress.Parse(targetIp);
-        _listenIp = IPAddress.Parse(listenIp);
+        var targetIp1 = IPAddress.Parse(targetIp);
+        var listenIp1 = IPAddress.Parse(listenIp);
 
-        _proxyEndPoint = new IPEndPoint(_listenIp, listenPort);
-        _serverEndPoint = new IPEndPoint(_targetIp, targetPort);
+        EndPoint proxyEndPoint = new IPEndPoint(listenIp1, listenPort);
 
-        Console.WriteLine($"Proxy started on {_proxyEndPoint}");
+        _serverEndPoint = new IPEndPoint(targetIp1, targetPort);
+        _socket.Bind(proxyEndPoint);
 
-        _socket.Bind(_proxyEndPoint);
+        Console.WriteLine($"Proxy started on {proxyEndPoint}");
     }
 
     public async Task Run()
@@ -103,6 +99,7 @@ public class Proxy
                 if (isDelayed)
                 {
                     Console.WriteLine($"\n--Delaying Packet From {(isToClient ? "Client" : "Server")}--\n");
+                 
                     var min = isToClient ? _clientDelayTimeMin : _serverDelayTimeMin;
                     var max = isToClient ? _clientDelayTimeMax : _serverDelayTimeMax;
                     var delayTime = CalculateDelayTime(min, max);
@@ -112,7 +109,7 @@ public class Proxy
                     await Task.Delay(TimeSpan.FromSeconds(delayTime));
                 }
 
-                Console.WriteLine($"\n--Forwarding Packet to {forwardTo}--\n");
+                Console.WriteLine($"\n--Forwarding Packet From {result.RemoteEndPoint} to {forwardTo}--\n");
                 await _socket.SendToAsync(new ArraySegment<byte>(packet.ConvertPacketToBytes()), SocketFlags.None,
                     forwardTo);
                 buffer.AsSpan().Clear();
@@ -131,7 +128,7 @@ public class Proxy
         var percent = random.NextDouble() * 100;
 
         Console.WriteLine(
-            $"Drop Percentage {percent}% | Calculated Drop Percentage {dropPercentage}% {percent < dropPercentage}");
+            $"Drop Percentage {dropPercentage}% | Calculated Drop Percentage {percent}% {percent < dropPercentage}");
         return percent < dropPercentage;
     }
 
@@ -140,6 +137,8 @@ public class Proxy
         var random = new Random();
         var percent = random.NextDouble() * 100;
 
+        Console.WriteLine(
+            $"Delay Percentage {delayPercentage}% | Calculated Delay Percentage {percent}% {percent < delayPercentage}");
         return percent < delayPercentage;
     }
 
