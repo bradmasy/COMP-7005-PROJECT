@@ -11,7 +11,7 @@ namespace Helpers;
  *
  * The size: The size of the entire payload the
  */
-public class Packet
+public class Packet : IComparable
 {
     /**
      * The sequence number representing the ordering of packets
@@ -31,6 +31,7 @@ public class Packet
     public int Port { get; set; } = 0;
     public IPAddress? EndPoint { get; set; }
 
+
     /**
      * Converts the packet into its header format in bytes
      */
@@ -42,14 +43,14 @@ public class Packet
         var portBytes = BitConverter.GetBytes(Port);
         var endPointBytes = EndPoint?.GetAddressBytes();
 
-        // create a packet of dynamic lenght where the header size is fixed but payload is n bytes
+        // create a packet of dynamic length where the header size is fixed but payload is n bytes
         var packet = new byte[HeaderSize + payloadBytes.Length];
 
         if (endPointBytes != null) Buffer.BlockCopy(endPointBytes, OffSet, packet, 0, IpSize);
         Buffer.BlockCopy(portBytes, OffSet, packet, IpSize, PortSize);
         Buffer.BlockCopy(sequenceNumberBytes, OffSet, packet, IpSize + PortSize, SequenceNumberSize);
         Buffer.BlockCopy(ackNumberBytes, OffSet, packet, IpSize + PortSize + SequenceNumberSize, AckNumberSize);
-        Buffer.BlockCopy(payloadBytes, OffSet, packet, IpSize + PortSize + SequenceNumberSize + AckNumberSize,
+        Buffer.BlockCopy(payloadBytes, OffSet, packet, HeaderSize,
             payloadBytes.Length);
         return packet;
     }
@@ -62,13 +63,16 @@ public class Packet
             BitConverter.ToInt32(new ReadOnlySpan<byte>(buffer, IpSize + PortSize, SequenceNumberSize));
         var ackNumber =
             BitConverter.ToInt32(new ReadOnlySpan<byte>(buffer, IpSize + PortSize + SequenceNumberSize, AckNumberSize));
+
         var payload = Encoding.UTF8.GetString(new ReadOnlySpan<byte>(buffer,
             IpSize + PortSize + SequenceNumberSize + AckNumberSize,
             buffer.Length - HeaderSize));
 
+
         return new Packet
         {
-            EndPoint = endPoint, Port = port, SequenceNumber = sequenceNumber, AckNumber = ackNumber, Payload = payload
+            EndPoint = endPoint, Port = port, SequenceNumber = sequenceNumber, AckNumber = ackNumber,
+            Payload = payload
         };
     }
 
@@ -76,5 +80,23 @@ public class Packet
     {
         return
             $"--Packet--\nEndPoint: {EndPoint}\nPort: {Port}\nSequenceNumber: {SequenceNumber}\nAckNumber: {AckNumber}\nPayload: {Payload}\n";
+    }
+
+
+    public int CompareTo(object obj)
+    {
+        var otherPacket = obj as Packet;
+        if (otherPacket == null) throw new ArgumentException("Object is not a Packet");
+
+        var sequenceComparison = SequenceNumber.CompareTo(otherPacket.SequenceNumber);
+        if (sequenceComparison != 0) return sequenceComparison;
+
+        var ackComparison = AckNumber.CompareTo(otherPacket.AckNumber);
+        if (ackComparison != 0) return ackComparison;
+
+        var payloadComparison = string.Compare(Payload, otherPacket.Payload, StringComparison.Ordinal);
+        return payloadComparison != 0
+            ? payloadComparison
+            : string.Compare(EndPoint?.ToString(), otherPacket.EndPoint?.ToString(), StringComparison.Ordinal);
     }
 }

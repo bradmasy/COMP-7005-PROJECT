@@ -9,17 +9,17 @@ public class Client
 {
     private readonly Socket _socket;
     private readonly EndPoint _endPoint;
-    private int _timeout;
-    private readonly IPAddress _ipAddress;
+    private readonly int _timeout;
     private int _maxRetry;
-    private readonly int _port;
-
+    private int _sequenceNumber;
+    private int _ackNumber = 0;
+    private readonly Dictionary<int, Packet> _receivedPackets = new();
+    private readonly Dictionary<int, Packet> _packets = new();
 
     public Client(string ipAddress, int port, int timeout, int maxRetry)
     {
-        _port = port;
-        _ipAddress = IPAddress.Parse(ipAddress);
-        _endPoint = new IPEndPoint(_ipAddress, port);
+        var ipAddress1 = IPAddress.Parse(ipAddress);
+        _endPoint = new IPEndPoint(ipAddress1, port);
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         _socket.Bind(new IPEndPoint(IPAddress.Any, 0));
         _timeout = timeout;
@@ -29,86 +29,155 @@ public class Client
 
     public async Task Run()
     {
-        var sequenceNumber = 0;
-        var ackNumber = 0;
-
         try
         {
             while (true)
             {
-                Console.WriteLine("Please Type The Payload For The Packet:\n");
-                var input = Console.ReadLine();
-                Console.WriteLine("\n");
+                var input = GetUserInput();
 
                 if (string.IsNullOrEmpty(input)) throw new Exception("Error: Please enter a valid argument.");
 
-                byte[]? received = null;
+                // run loop at least one time
+                if (_maxRetry == 0) _maxRetry = 1;
 
+                BuildPackets(input);
+
+                _receivedPackets.Clear(); // Clear previous received packets
+
+                // sending a certain amount of packets for a certain amount of retries
                 for (var i = 0; i < _maxRetry; i++)
                 {
-                    Console.WriteLine($"Sending message {i + 1}/{_maxRetry}");
-                    await Send(input, sequenceNumber, ackNumber);
+                    Console.WriteLine($"Sending message {i + 1}/{_maxRetry}\n");
 
-                    var receiveTask = Receive();
+                    await Send(isRetry: i > 0);
+
+                    // If we've received all packets, break out of the retry loop
+                    if (_receivedPackets.Count == _packets.Count)
+                    {
+                        Console.WriteLine("All packets acknowledged, stopping retries.\n");
+                        break;
+                    }
+
+                    var receiveTask = Task.Run(async () =>
+                    {
+                        // await each packet sent before confirming data has been received 
+                        while (_receivedPackets.Count < _packets.Count)
+                        {
+                            try
+                            {
+                                var data = await Receive();
+                                var packet = Packet.ConvertBytesToPacket(data);
+
+                                // if the matching ack number is different then there is a mismatch and we skip this packet/drop
+                                if (packet.AckNumber != _packets[packet.SequenceNumber].SequenceNumber)
+                                {
+                                    Console.WriteLine(
+                                        $"Warning: Received packet with mismatched acknowledgment number. Expected: {_packets[packet.SequenceNumber].SequenceNumber}, Got: {packet.AckNumber}");
+                                    continue;
+                                }
+
+                                // the key in the dictionary is the sequence number
+                                _receivedPackets[packet.SequenceNumber] = packet;
+                            }
+                            catch (SocketException ex)
+                            {
+                                Console.WriteLine(ex.Message);
+                                break;
+                            }
+                        }
+                    });
+
                     var timeoutTask = Task.Delay(TimeSpan.FromSeconds(_timeout));
-
                     var completedTask = await Task.WhenAny(receiveTask, timeoutTask);
 
-                    if (completedTask == timeoutTask) continue;
+                    if (completedTask == timeoutTask)
+                    {
+                        Console.WriteLine($"Timeout occurred after {_timeout} seconds, retrying...\n");
+                        continue;
+                    }
 
-                    received = receiveTask.Result;
+                    // If we've received all packets, break out of the retry loop
+                    if (_receivedPackets.Count != _packets.Count) continue;
+                    Console.WriteLine("All packets acknowledged, stopping retries.\n");
                     break;
                 }
 
-                if (received == null) throw new Exception("Error: No packet received.");
-
-                var convertedPacket = Packet.ConvertBytesToPacket(received);
-                Console.WriteLine("\nReceived Packet:\n");
-                Console.WriteLine(convertedPacket.ToString());
-
-                // if the Acknowledgement is incorrect
-                if (convertedPacket.AckNumber != (input.Length + ackNumber))
+                if (_receivedPackets.Count != _packets.Count)
                 {
-                    Console.WriteLine($"Incoming Ack Number: {convertedPacket.AckNumber}");
-                    Console.WriteLine($"Expected Ack Number: {input.Length + ackNumber}");
-                    Console.WriteLine("Error: Invalid packet received.");
+                    Console.WriteLine("Error: Not all packets received.");
+                    continue;
                 }
 
-                // if the sequence is incorrect
-                if (sequenceNumber != (sequenceNumber + 1))
-                {
-                    Console.WriteLine("Error: Invalid sequence number received.");
-                }
 
-                ackNumber += convertedPacket.AckNumber;
-                sequenceNumber += convertedPacket.SequenceNumber;
+                Console.WriteLine($"Received {_receivedPackets.Count} Packets\n");
+                foreach (var packet in _receivedPackets.Values)
+                {
+                    Console.WriteLine(packet);
+                }
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine(ex);
             Console.WriteLine(ex.Message);
             throw new Exception("Client error", ex);
         }
     }
 
-    private async Task Send(string data, int sequenceNumber, int ackNumber)
+    private async Task<bool> IsCorrectPacket()
     {
-        var packet = new Packet
-        {
-            SequenceNumber = sequenceNumber,
-            AckNumber = ackNumber,
-            Payload = data
-        };
+        var data = await Receive();
+        var packet = Packet.ConvertBytesToPacket(data);
 
-        var packetBytes = packet.ConvertPacketToBytes();
-        var bytesToPacket = Packet.ConvertBytesToPacket(packetBytes);
-        Console.WriteLine(bytesToPacket.ToString());
-        await _socket.SendToAsync(new ArraySegment<byte>(packetBytes), _endPoint);
+        // if the matching ack number is different then there is a mismatch and we skip this packet/drop
+        if (packet.AckNumber != _packets[packet.SequenceNumber].SequenceNumber)
+        {
+            Console.WriteLine(
+                $"Warning: Received packet with mismatched acknowledgment number. Expected: {_packets[packet.SequenceNumber].SequenceNumber}, Got: {packet.AckNumber}");
+            return false;
+            //   continue;
+        }
+
+        // the key in the dictionary is the sequence number
+        _receivedPackets[packet.SequenceNumber] = packet;
+        return true;
+    }
+
+private async Task Send(bool isRetry = false)
+    {
+        // Only send packets that haven't been acknowledged yet
+        var packetsToSend = isRetry
+            ? _packets.Where(p => !_receivedPackets.ContainsKey(p.Key))
+            : _packets;
+
+        if (!packetsToSend.Any())
+        {
+            Console.WriteLine("All packets have been acknowledged, no need to send more.\n");
+            return;
+        }
+
+        Console.WriteLine($"Sending {packetsToSend.Count()} packet(s)...\n");
+
+        var packets = packetsToSend
+            .OrderBy(p => p.Value.SequenceNumber)
+            .Select(p => p.Value.ConvertPacketToBytes())
+            .Select(b => _socket.SendToAsync(b, SocketFlags.None, _endPoint))
+            .ToList();
+
+        await Task.WhenAll(packets);
+    }
+
+    private static string? GetUserInput()
+    {
+        Console.WriteLine("Please Type The Payload For The Packet:\n");
+        var input = Console.ReadLine();
+        Console.WriteLine("\n");
+        return input;
     }
 
     private async Task<byte[]> Receive()
     {
-        var buffer = new byte[MaxPacketSize];
+        var buffer = new byte[PacketSize];
 
         EndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
@@ -117,5 +186,37 @@ public class Client
 
         var receivedData = buffer[..result.ReceivedBytes];
         return receivedData;
+    }
+
+    private void BuildPackets(string data)
+    {
+        _packets.Clear();
+
+        var packet = new Packet
+        {
+            SequenceNumber = _sequenceNumber++,
+            AckNumber = _ackNumber++,
+            Payload = data
+        };
+
+        _packets[packet.SequenceNumber] = packet;
+
+        // var index = 0;
+        //
+        // while (index < data.Length)
+        // {
+        //     var chunkLength = Math.Min(Chunk, data.Length - index);
+        //     var chunk = data.Substring(index, chunkLength);
+        //
+        //     var packet = new Packet
+        //     {
+        //         SequenceNumber = _sequenceNumber++,
+        //         AckNumber = _ackNumber++,
+        //         Payload = chunk
+        //     };
+        //
+        //     _packets[packet.SequenceNumber] = packet;
+        //     index += Chunk;
+        // }
     }
 }

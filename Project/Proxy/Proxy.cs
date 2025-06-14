@@ -52,7 +52,7 @@ public class Proxy
         _serverEndPoint = new IPEndPoint(targetIp1, targetPort);
         _socket.Bind(proxyEndPoint);
 
-        Console.WriteLine($"Proxy started on {proxyEndPoint}");
+        Console.WriteLine($"Proxy started on {proxyEndPoint}\n");
     }
 
     public async Task Run()
@@ -66,6 +66,9 @@ public class Proxy
             {
                 var result = await _socket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None, sender);
                 var packet = Packet.ConvertBytesToPacket(buffer);
+
+                Console.WriteLine($"Incoming Packet From {result.RemoteEndPoint}\n");
+                Console.WriteLine(packet);
 
                 // append the incoming IP of the packet as the endpoint for the returning packet to help redirect to client
                 var isToClient = !result.RemoteEndPoint.Equals(_serverEndPoint);
@@ -99,7 +102,7 @@ public class Proxy
                 if (isDelayed)
                 {
                     Console.WriteLine($"\n--Delaying Packet From {(isToClient ? "Client" : "Server")}--\n");
-                 
+
                     var min = isToClient ? _clientDelayTimeMin : _serverDelayTimeMin;
                     var max = isToClient ? _clientDelayTimeMax : _serverDelayTimeMax;
                     var delayTime = CalculateDelayTime(min, max);
@@ -117,7 +120,6 @@ public class Proxy
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex);
             Console.WriteLine(ex.Message);
         }
     }

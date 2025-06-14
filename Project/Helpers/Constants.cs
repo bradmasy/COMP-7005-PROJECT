@@ -14,8 +14,9 @@ public static class Constants
     // Sizes
     private const int Bit = 1;
     private const int Byte = Bit * 4;
-    
-    public const int FlagBytes = Bit * 4;
+    public const int Chunk = 1024;
+    public const int PacketSize = HeaderSize + Chunk;
+    public const int InitiateSequenceNumber = -1;
         
     // the max size of the header is 32-Bits or 4 Bytes
     public const int MinHeaderSize = Byte * 2;
@@ -23,10 +24,10 @@ public static class Constants
     public const int OffsetSize = Bit * 4;
     public const int OffSet = 0;
     
-    public const int PortSize = 2;
-    public const int IpSize = 4;
-    public const int SequenceNumberSize = 4;
-    public const int AckNumberSize = 4;
+    public const int PortSize = Bit * 2;
+    public const int IpSize = Bit * 4;
+    public const int SequenceNumberSize = Bit * 4;
+    public const int AckNumberSize = Bit * 4;
     public const int HeaderSize = IpSize + PortSize + SequenceNumberSize + AckNumberSize;
     
     // Client Constants
