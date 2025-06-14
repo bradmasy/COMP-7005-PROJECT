@@ -12,7 +12,7 @@ public class Client
     private readonly int _timeout;
     private int _maxRetry;
     private int _sequenceNumber;
-    private int _ackNumber = 0;
+    private int _ackNumber;
     private readonly Dictionary<int, Packet> _receivedPackets = new();
     private readonly Dictionary<int, Packet> _packets = new();
 
@@ -44,106 +44,113 @@ public class Client
 
                 _receivedPackets.Clear(); // Clear previous received packets
 
-                // sending a certain amount of packets for a certain amount of retries
-                for (var i = 0; i < _maxRetry; i++)
-                {
-                    Console.WriteLine($"Sending message {i + 1}/{_maxRetry}\n");
+                await SendAndRetry();
 
-                    await Send(isRetry: i > 0);
+                if (ReceivedExpectedAmountOfPackets()) continue;
 
-                    // If we've received all packets, break out of the retry loop
-                    if (_receivedPackets.Count == _packets.Count)
-                    {
-                        Console.WriteLine("All packets acknowledged, stopping retries.\n");
-                        break;
-                    }
-
-                    var receiveTask = Task.Run(async () =>
-                    {
-                        // await each packet sent before confirming data has been received 
-                        while (_receivedPackets.Count < _packets.Count)
-                        {
-                            try
-                            {
-                                var data = await Receive();
-                                var packet = Packet.ConvertBytesToPacket(data);
-
-                                // if the matching ack number is different then there is a mismatch and we skip this packet/drop
-                                if (packet.AckNumber != _packets[packet.SequenceNumber].SequenceNumber)
-                                {
-                                    Console.WriteLine(
-                                        $"Warning: Received packet with mismatched acknowledgment number. Expected: {_packets[packet.SequenceNumber].SequenceNumber}, Got: {packet.AckNumber}");
-                                    continue;
-                                }
-
-                                // the key in the dictionary is the sequence number
-                                _receivedPackets[packet.SequenceNumber] = packet;
-                            }
-                            catch (SocketException ex)
-                            {
-                                Console.WriteLine(ex.Message);
-                                break;
-                            }
-                        }
-                    });
-
-                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(_timeout));
-                    var completedTask = await Task.WhenAny(receiveTask, timeoutTask);
-
-                    if (completedTask == timeoutTask)
-                    {
-                        Console.WriteLine($"Timeout occurred after {_timeout} seconds, retrying...\n");
-                        continue;
-                    }
-
-                    // If we've received all packets, break out of the retry loop
-                    if (_receivedPackets.Count != _packets.Count) continue;
-                    Console.WriteLine("All packets acknowledged, stopping retries.\n");
-                    break;
-                }
-
-                if (_receivedPackets.Count != _packets.Count)
-                {
-                    Console.WriteLine("Error: Not all packets received.");
-                    continue;
-                }
-
-
-                Console.WriteLine($"Received {_receivedPackets.Count} Packets\n");
-                foreach (var packet in _receivedPackets.Values)
-                {
-                    Console.WriteLine(packet);
-                }
+                DisplayPackets();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex);
             Console.WriteLine(ex.Message);
             throw new Exception("Client error", ex);
         }
     }
 
-    private async Task<bool> IsCorrectPacket()
+    private void DisplayPackets()
+    {
+        Console.WriteLine($"Received {_receivedPackets.Count} Packets\n");
+        foreach (var packet in _receivedPackets.Values)
+        {
+            Console.WriteLine(packet);
+        }
+    }
+
+    private bool ReceivedExpectedAmountOfPackets()
+    {
+        return _receivedPackets.Count != _packets.Count;
+    }
+
+    private async Task SendAndRetry()
+    {
+        for (var i = 0; i < _maxRetry; i++)
+        {
+            Console.WriteLine($"Sending message {i + 1}/{_maxRetry}\n");
+
+            await Send(isRetry: i > 0);
+
+            // If we've received all packets, break out of the retry loop
+            if (_receivedPackets.Count == _packets.Count)
+            {
+                Console.WriteLine("All packets acknowledged, stopping retries.\n");
+                break;
+            }
+
+            var receiveTask = ReceiveNPackets();
+
+            var timeout = await IsTimeOut(receiveTask);
+
+            if (timeout) continue;
+
+            if (_receivedPackets.Count != _packets.Count) continue;
+
+            Console.WriteLine("All packets acknowledged, stopping retries.\n");
+            break;
+        }
+    }
+
+    private Task ReceiveNPackets()
+    {
+        var task = Task.Run(async () =>
+        {
+            // await each packet sent before confirming data has been received 
+            while (_receivedPackets.Count < _packets.Count)
+            {
+                try
+                {
+                    await IsCorrectPacket();
+                }
+                catch (SocketException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    break;
+                }
+            }
+        });
+
+        return task;
+    }
+
+    private async Task IsCorrectPacket()
     {
         var data = await Receive();
         var packet = Packet.ConvertBytesToPacket(data);
 
-        // if the matching ack number is different then there is a mismatch and we skip this packet/drop
+        // if the matching ack number is different then there is a mismatch, and we skip this packet/drop
         if (packet.AckNumber != _packets[packet.SequenceNumber].SequenceNumber)
         {
             Console.WriteLine(
                 $"Warning: Received packet with mismatched acknowledgment number. Expected: {_packets[packet.SequenceNumber].SequenceNumber}, Got: {packet.AckNumber}");
-            return false;
+            return;
             //   continue;
         }
 
         // the key in the dictionary is the sequence number
         _receivedPackets[packet.SequenceNumber] = packet;
+    }
+
+    private async Task<bool> IsTimeOut(Task receiveTask)
+    {
+        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(_timeout));
+        var completedTask = await Task.WhenAny(receiveTask, timeoutTask);
+
+        if (completedTask != timeoutTask) return false;
+        Console.WriteLine($"Timeout occurred after {_timeout} seconds, retrying...\n");
         return true;
     }
 
-private async Task Send(bool isRetry = false)
+    private async Task Send(bool isRetry = false)
     {
         // Only send packets that haven't been acknowledged yet
         var packetsToSend = isRetry
