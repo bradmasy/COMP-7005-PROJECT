@@ -69,39 +69,8 @@ public class Proxy
 
                 DisplayIncomingTraffic(result, packet);
 
-                // append the incoming IP of the packet as the endpoint for the returning packet to help redirect to client
-                var isToClient = !result.RemoteEndPoint.Equals(_serverEndPoint);
-
-                AssignClientDestination(isToClient, result, packet);
-
-                // If the incoming packet is from the static server, we will forward to the client endpoint
-                var forwardTo = result.RemoteEndPoint.Equals(_serverEndPoint)
-                    ? new IPEndPoint(packet.EndPoint, packet.Port)
-                    : _serverEndPoint;
-
-                var isDropped = IsDropped(isToClient
-                    ? _clientDropPercent
-                    : _serverDropPercent);
-
-                if (isDropped)
-                {
-                    Console.WriteLine($"\n--Dropping Packet From {(isToClient ? "Client" : "Server")}--\n");
-                    continue;
-                }
-
-                var isDelayed =
-                    IsDelayed(isToClient ? _clientDelayPercent : _serverDelayPercent);
-
-                if (isDelayed)
-                {
-                    var delayTime = CalculateDelay(isToClient);
-                    await Task.Delay(TimeSpan.FromSeconds(delayTime));
-                }
-
-                Console.WriteLine($"\n--Forwarding Packet From {result.RemoteEndPoint} to {forwardTo}--\n");
-
-                await Send(packet, forwardTo);
-
+                Task.Run(() => ProcessPacket(result, packet));
+           
                 buffer.AsSpan().Clear();
             }
         }
@@ -114,6 +83,43 @@ public class Proxy
     public void Shutdown()
     {
         _socket.Close();
+    }
+    
+    
+    private async Task ProcessPacket(SocketReceiveFromResult result, Packet packet)
+    {
+        // append the incoming IP of the packet as the endpoint for the returning packet to help redirect to client
+        var isToClient = !result.RemoteEndPoint.Equals(_serverEndPoint);
+
+        AssignClientDestination(isToClient, result, packet);
+
+        // If the incoming packet is from the static server, we will forward to the client endpoint
+        var forwardTo = result.RemoteEndPoint.Equals(_serverEndPoint)
+            ? new IPEndPoint(packet.EndPoint, packet.Port)
+            : _serverEndPoint;
+
+        var isDropped = IsDropped(isToClient
+            ? _clientDropPercent
+            : _serverDropPercent);
+
+        if (isDropped)
+        {
+            Console.WriteLine($"\n--Dropping Packet From {(isToClient ? "Client" : "Server")}--\n");
+            return;
+        }
+
+        var isDelayed =
+            IsDelayed(isToClient ? _clientDelayPercent : _serverDelayPercent);
+
+        if (isDelayed)
+        {
+            var delayTime = CalculateDelay(isToClient);
+            await Task.Delay(TimeSpan.FromSeconds(delayTime)); // Delay packet if needed
+        }
+
+        Console.WriteLine($"\n--Forwarding Packet From {result.RemoteEndPoint} to {forwardTo}--\n");
+
+        await Send(packet, forwardTo); // Send packet to its destination
     }
 
     private async Task Send(Packet packet, EndPoint endPoint)
