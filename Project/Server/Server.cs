@@ -24,9 +24,8 @@ public class Server(string ipAddress, int port)
         {
             try
             {
-                EndPoint sender = new IPEndPoint(IPAddress.Any, 0);
-                var result = await _socket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None, sender);
-
+                var sender = new IPEndPoint(IPAddress.Any, 0);
+                var result = await Receive(buffer, sender);
                 var receivedData = buffer[..result.ReceivedBytes];
                 var packet = Packet.ConvertBytesToPacket(receivedData);
 
@@ -43,11 +42,7 @@ public class Server(string ipAddress, int port)
 
                 var ackPacket = CreateAcknowledgement(nextPacket);
 
-                await _socket.SendToAsync(
-                    new ArraySegment<byte>(ackPacket.ConvertPacketToBytes()),
-                    result.RemoteEndPoint
-                );
-
+                await Send(ackPacket, result);
                 // Update expected sequence number
                 _expectedSequenceNumber = nextPacket.SequenceNumber + 1;
 
@@ -62,6 +57,19 @@ public class Server(string ipAddress, int port)
                 Console.WriteLine(ex.Message);
             }
         }
+    }
+
+    private async Task<SocketReceiveFromResult> Receive(byte[] buffer, EndPoint sender)
+    {
+        return await _socket.ReceiveFromAsync(new ArraySegment<byte>(buffer), SocketFlags.None, sender);
+    }
+
+    private async Task<int> Send(Packet ackPacket, SocketReceiveFromResult result)
+    {
+        return await _socket.SendToAsync(
+            new ArraySegment<byte>(ackPacket.ConvertPacketToBytes()),
+            result.RemoteEndPoint
+        );
     }
 
     private Packet? IsReceivedPacket(Packet packet)

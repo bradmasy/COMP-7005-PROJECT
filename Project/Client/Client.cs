@@ -25,6 +25,8 @@ public class Client
         _timeout = timeout;
         _maxRetry = maxRetry;
         _socket.ReceiveTimeout = timeout;
+
+        Console.WriteLine($"Client running on port: {((IPEndPoint)_socket.LocalEndPoint).Port}");
     }
 
     public async Task Run()
@@ -56,6 +58,11 @@ public class Client
             Console.WriteLine(ex.Message);
             throw new Exception("Client error", ex);
         }
+    }
+
+    public void Shutdown()
+    {
+        _socket.Close();
     }
 
     private void DisplayPackets()

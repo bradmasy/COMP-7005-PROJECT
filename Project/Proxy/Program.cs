@@ -10,7 +10,7 @@ class Program
         try
         {
             Validator.ValidateProxy(args);
-            
+
             var listenIp = args[ListenIp];
             var listenPort = args[ListenPort];
             var targetIp = args[ForwardingIp];
@@ -35,6 +35,7 @@ class Program
                 int.Parse(serverDelayTimeMin));
 
             await proxy.Run();
+            proxy.Shutdown();
         }
         catch (Exception ex)
         {
