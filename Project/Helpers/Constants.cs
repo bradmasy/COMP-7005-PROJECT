@@ -14,7 +14,7 @@ public static class Constants
     // Sizes
     private const int Bit = 1;
     private const int Byte = Bit * 4;
-    public const int Chunk = 1024;
+    private const int Chunk = 1024;
     public const int PacketSize = HeaderSize + Chunk;
     public const int InitiateSequenceNumber = -1;
         
